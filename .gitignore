@@ -1,0 +1,16 @@
+**/test
+**/testtmp
+**/.DS_Store
+**/__pycache__
+**/__MACOSX
+**/lib
+**/packages
+**/.project
+**/.vscode
+**/.ipynb_checkpoints
+*.pyc
+*.log
+*log
+*.out
+**.nfs*
+**/tests
