@@ -1,7 +1,8 @@
 # scripts excluded from help function
 coco_eval.py
 coco_utils.py
+cocoeval.py
 engine.py
 models.py
-utils.py
 transforms.py
+utils.py

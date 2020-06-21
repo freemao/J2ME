@@ -2,10 +2,11 @@ import math
 import sys
 import time
 import torch
+import torchvision
 
-import J2ME.detectron.utils as utils
-from J2ME.detectron.coco_utils import get_coco_api_from_dataset
-from J2ME.detectron.coco_eval import CocoEvaluator
+import J2ME.detecto.utils as utils
+from J2ME.detecto.coco_utils import get_coco_api_from_dataset
+from J2ME.detecto.coco_eval import CocoEvaluator
 
 def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq):
 
@@ -70,7 +71,6 @@ def evaluate(model, data_loader, device):
     n_threads = torch.get_num_threads()
     # FIXME remove this and make paste_masks_in_image run on the GPU
     torch.set_num_threads(n_threads)
-    cpu_device = torch.device("cpu")
     model.eval()
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Test:'
@@ -87,7 +87,7 @@ def evaluate(model, data_loader, device):
         model_time = time.time()
         outputs = model(images)
 
-        outputs = [{k: v.to(cpu_device) for k, v in t.items()} for t in outputs]
+        outputs = [{k: v.to(device) for k, v in t.items()} for t in outputs]
         model_time = time.time() - model_time
 
         res = {target["image_id"].item(): output for target, output in zip(targets, outputs)}

@@ -1,19 +1,16 @@
 import json
-import tempfile
-
-import numpy as np
 import copy
 import time
 import torch
 import torch._six
-
-from pycocotools.cocoeval import COCOeval
-from pycocotools.coco import COCO
-import pycocotools.mask as mask_util
-
+import numpy as np
 from collections import defaultdict
 
-import J2ME.detectron.utils as utils
+import pycocotools.mask as mask_util
+from pycocotools.coco import COCO
+
+from J2ME.detecto.cocoeval import COCOeval # make sure using the 2.0.1 version
+import J2ME.detecto.utils as utils
 
 
 class CocoEvaluator(object):
