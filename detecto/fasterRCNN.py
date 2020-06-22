@@ -9,19 +9,27 @@ Object detection using Faster-RCNN implemented in pytorch
 import os
 import sys
 import time
-import torch
+import datetime
 import logging
-import torchvision
 import numpy as np
 import pandas as pd
-from PIL import Image
+from pathlib import Path
 
-import J2ME.detectron.utils as utils
+
+import torch
+import torchvision
+from torch import nn
+
+
 from J2ME.apps.base import OptionParser, ActionDispatcher, put2slurm
 from J2ME.common.base import EarlyStopping 
 from J2ME.common.datasets import ObjectDetectionDataset
-from J2ME.detectron.engine import train_one_epoch, evaluate
-import J2ME.detectron.transforms as T
+from J2ME.common.draw import show_box
+
+import J2ME.detecto.utils as utils
+import J2ME.detecto.transforms as T
+from J2ME.detecto.engine import train_one_epoch, evaluate
+
 
 from torch.utils.data import DataLoader
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
@@ -95,7 +103,6 @@ def train(args):
     logfile = model_name_prefix + '.log'
     #histfile = model_name_prefix + '.hist.csv'
     logging.basicConfig(filename=logfile, level=logging.DEBUG, format="%(asctime)s:%(levelname)s:%(message)s")
-
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     logging.debug('device: %s'%device)
     logging.debug('pytorch version: %s'%torch.__version__)
@@ -117,7 +124,8 @@ def train(args):
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
                                                    step_size=3,
                                                    gamma=0.1)
-    
+    print('start training')
+    start_time = time.time()
     for epoch in range(opts.epoch):
         # train for one epoch, printing every 10 iterations
         train_one_epoch(model, optimizer, dataloaders_dict['train'], device, epoch, print_freq=10)
@@ -136,6 +144,10 @@ def train(args):
 
         # evaluate on the test dataset
         evaluate(model, dataloaders_dict['valid'], device=device)
+    
+    total_time = time.time() - start_time
+    total_time_str = str(datetime.timedelta(seconds=int(total_time)))
+    print('Training time {}'.format(total_time_str))
 
 def predict(args):
     """
@@ -147,8 +159,6 @@ def predict(args):
         output: csv file saving prediction results
     """
     p = OptionParser(predict.__doc__)
-    p.add_option('--batchsize', default=2, type='int', 
-                    help='batch size')
     p.add_option('--backbone', default='resnet50',
                     help='pretrained model name used as backbone')
     p.add_option('--disable_slurm', default=False, action="store_true",
@@ -175,16 +185,30 @@ def predict(args):
         sys.exit()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+    print(device)
     model = get_model(2)
+    checkpoint = torch.load(saved_model, map_location={'cuda:0': 'cpu'})
 
-    model.load_state_dict(torch.load(saved_model, map_location=device))
+    model.load_state_dict(checkpoint['model'])
+    model = model.to(device)
     model.eval()
 
     test_dataset = ObjectDetectionDataset(test_csv, test_dir, get_transform(train=False))
-    test_loader = DataLoader(test_dataset, batch_size=opts.batchsize)
+    test_loader = DataLoader(test_dataset, batch_size=1)
 
-    evaluate(model, test_loader, device=device)
+    fns, boxes, labels, scores = [], [], [], []
+    for imgs, targets, fns in test_loader:
+        imgs = imgs.to(device)
+        results = model(imgs)
+        fn = fns[0]
+        print(fn)
+        boxes, labels, scores = results[0]['boxes'], results[0]['labels'], results[0]['scores']
+        boxes = [i.to(device).tolist() for i in boxes]
+        labels = [i.to(device).tolist() for i in labels]
+        scores = [i.to(device).tolist() for i in scores]
+        img = show_box(Path(test_dir)/fn, boxes, labels, scores)
+        img_out_fn = fn.replace('.png', '.prd.jpg') if fn.endswith('.png') else fn.replace('.jpg', '.prd.jpg')
+        img.save(img_out_fn)
 
 if __name__ == "__main__":
     main()

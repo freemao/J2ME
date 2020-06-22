@@ -4,7 +4,7 @@ import numpy as np
 import datetime
 import time
 from collections import defaultdict
-import mask as maskUtils
+import J2ME.detecto.mask as maskUtils
 import copy
 
 
