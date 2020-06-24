@@ -15,24 +15,20 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-
 import torch
 import torchvision
 from torch import nn
-
+from torch.utils.data import DataLoader
+from torchvision.models.detection.rpn import AnchorGenerator
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
 from J2ME.apps.base import OptionParser, ActionDispatcher, put2slurm
 from J2ME.common.base import EarlyStopping 
 from J2ME.common.datasets import ObjectDetectionDataset
 from J2ME.common.draw import show_box
-
+from J2ME.detecto.engine import train_one_epoch, evaluate
 import J2ME.detecto.utils as utils
 import J2ME.detecto.transforms as T
-from J2ME.detecto.engine import train_one_epoch, evaluate
-
-
-from torch.utils.data import DataLoader
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
 def main():
     actions = (
@@ -49,8 +45,23 @@ def get_transform(train):
         transforms.append(T.RandomHorizontalFlip(0.5))
     return T.Compose(transforms)
 
-def get_model(num_classes):
-    model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True, progress=True)
+def get_model(num_classes, backbone='resnet50',
+                s=((30),) , ar=((1.0),),
+                box_nms_thresh = 0.3):
+    anchor_generator = AnchorGenerator(sizes=s, aspect_ratios=ar)
+
+    if backbone == 'resnet50':
+        model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True, progress=True, 
+                                                        rpn_anchor_generator=anchor_generator,
+                                                        box_nms_thresh = box_nms_thresh)
+    elif backbone == 'resnet101':
+        from J2ME.detecto.models import fasterrcnn_resnet101_fpn
+        model = fasterrcnn_resnet101_fpn(pretrained=True, progress=True,
+                                        rpn_anchor_generator=anchor_generator,
+                                        box_nms_thresh = box_nms_thresh)
+    else:
+        sys.exit('only resnet50 and resnet101 supported!')
+
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
     return model
@@ -161,6 +172,8 @@ def predict(args):
     p = OptionParser(predict.__doc__)
     p.add_option('--backbone', default='resnet50',
                     help='pretrained model name used as backbone')
+    p.add_option('--score_cutoff', type='float', default=0.9,
+                    help='set score cutoff')
     p.add_option('--disable_slurm', default=False, action="store_true",
                  help='run directly without generating slurm job')
     p.add_slurm_opts(job_prefix=predict.__name__)
@@ -170,7 +183,6 @@ def predict(args):
         sys.exit(not p.print_help())
     saved_model, test_csv, test_dir, output = args
 
-    # genearte slurm file
     if not opts.disable_slurm:
         cmd_header = 'ml singularity'
         cmd = "singularity exec docker://unlhcc/pytorch:1.5.0 "\
@@ -203,10 +215,12 @@ def predict(args):
         fn = fns[0]
         print(fn)
         boxes, labels, scores = results[0]['boxes'], results[0]['labels'], results[0]['scores']
-        boxes = [i.to(device).tolist() for i in boxes]
-        labels = [i.to(device).tolist() for i in labels]
-        scores = [i.to(device).tolist() for i in scores]
-        img = show_box(Path(test_dir)/fn, boxes, labels, scores)
+        boxes = np.array([i.to(device).tolist() for i in boxes])
+        labels = np.array([i.to(device).tolist() for i in labels])
+        scores = np.array([i.to(device).tolist() for i in scores])
+        idxs = np.argwhere(scores>opts.score_cutoff).squeeze()
+
+        img = show_box(Path(test_dir)/fn, boxes[idxs], labels[idxs], scores[idxs])
         img_out_fn = fn.replace('.png', '.prd.jpg') if fn.endswith('.png') else fn.replace('.jpg', '.prd.jpg')
         img.save(img_out_fn)
 
