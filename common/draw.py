@@ -14,7 +14,8 @@ def show_box(img_fn, boxes, labels, scores):
     font = ImageFont.truetype(str(font_dir/"calibril.ttf"), 10)
     
     for box, label, score in zip(boxes, labels, scores):
-        if not isinstance(box, 'list'):
+        #print(box, label, score)
+        if not isinstance(box, list):
             box = list(box)
         color = c_dict[label]
         draw.rectangle(xy=box, outline=color) 
