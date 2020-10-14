@@ -24,7 +24,7 @@ class GeneExpressionDataset(Dataset):
                 first col: sample names
                 2nd beyond: gene names
         """
-        self.csv_df = pd.read_csv(csv_fn, index=0) # the sample column will be index
+        self.csv_df = pd.read_csv(csv_fn, index_col=0) # the sample column will be index
         self.transform = transform
 
     def __len__(self):
@@ -33,8 +33,9 @@ class GeneExpressionDataset(Dataset):
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        fpkms = self.csv_df.iloc[:, idx].astype(np.float32).values
-        label = self.csv_df.columns[idx]
+        
+        label = self.csv_df.index[idx] # sample name
+        fpkms = self.csv_df.iloc[idx,:].astype(np.float32).values # fpkm values for all genes in the sample
         return torch.tensor(fpkms), label
 
 class LeafcountingDataset(Dataset):
