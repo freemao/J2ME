@@ -44,7 +44,7 @@ def train(args):
     p = OptionParser(train.__doc__)
     p.add_option('--latentsize', default=5, type='int',
                     help='the size of the latent feature')
-    p.add_option('--batchsize', default=32, type='int', 
+    p.add_option('--batchsize', default=64, type='int', 
                     help='batch size')
     p.add_option('--epoch', default=2000, type='int', 
                     help='number of total epochs')
@@ -117,9 +117,6 @@ def train(args):
 def predict(args):
     """
     %prog predict saved_model predict_csv, output_prefix
-    Args:
-        saved_model: name of saved pytorch model
-        predict_csv: tab separated FPKM matrix file with column names 
     """
     p = OptionParser(predict.__doc__)
     p.add_option('--latentsize', default=5, type='int',
@@ -139,7 +136,7 @@ def predict(args):
     out_dir = Path(opts.output_dir)
     if not out_dir.exists():
         out_dir.mkdir()
-    input_size = pd.read_csv(predict_csv, delim_whitespace=True).shape[0]
+    input_size = pd.read_csv(train_csv, index_col=0).shape[1]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = SimpleAE(input_shape=input_size, output_shape=opts.latentsize).to(device)
@@ -152,7 +149,7 @@ def predict(args):
     Original, LatentSpace, Constructed, Labels = [], [], [], []
     for batch_features, label in predict_loader:
         Original.append(batch_features)
-        ls = model.encoder(batch_features).detach().numpy()
+        ls = model.encoder(batch_features).detach().numpy() 
         LatentSpace.append(ls)
         cst = model(batch_features).detach().numpy()
         Constructed.append(cst)
@@ -162,10 +159,10 @@ def predict(args):
     cons = np.concatenate(Constructed)
     labe = np.concatenate(Labels)
     
-    np.save(Path(opts.output_dir)/'original.npy', orig)
-    np.save(Path(opts.output_dir)/'latent.npy', late)
-    np.save(Path(opts.output_dir)/'constructed.npy', cons)
-    np.save(Path(opts.output_dir)/'label.npy', labe)
+    np.save(Path(opts.output_dir)/('%s_original.npy'%output_prefix), orig)
+    np.save(Path(opts.output_dir)/('%s_latent.npy'%output_prefix), late)
+    np.save(Path(opts.output_dir)/('%s_constructed.npy'%output_prefix), cons)
+    np.save(Path(opts.output_dir)/('%s_label.npy'%output_prefix), labe)
 
 if __name__ == "__main__":
     main()
