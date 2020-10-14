@@ -37,15 +37,16 @@ def train(args):
     """
     %prog train train_csv, model_name_prefix
     Args:
-        train_csv: tab separated FPKM matrix file with column names 
+        train_csv: FPKM matrix csv file
+            1st column is sample names, 2nd beyound is gene normalized FPKM values
         model_name_prefix: the prefix of the output model name 
     """
     p = OptionParser(train.__doc__)
-    p.add_option('--latentsize', default=3, type='int',
+    p.add_option('--latentsize', default=5, type='int',
                     help='the size of the latent feature')
     p.add_option('--batchsize', default=32, type='int', 
                     help='batch size')
-    p.add_option('--epoch', default=200, type='int', 
+    p.add_option('--epoch', default=2000, type='int', 
                     help='number of total epochs')
     p.add_option('--patience', default=20, type='int', 
                     help='patience in early stopping')
@@ -59,7 +60,24 @@ def train(args):
     if len(args) != 2:
         sys.exit(not p.print_help())
     train_csv, model_name_prefix = args
-    input_size = pd.read_csv(train_csv, delim_whitespace=True).shape[0]
+
+    # genearte slurm file
+    if not opts.disable_slurm:
+        cmd = "python -m J2ME.AE.autoencoder train "\
+            f"{train_csv} {model_name_prefix} --disable_slurm "
+        if opts.latentsize:
+            cmd += f"--latentsize {opts.latentsize} "
+        if opts.batchsize:
+            cmd += f"--batchsize {opts.batchsize} "
+        if opts.epoch:
+            cmd += f"--epoch {opts.epoch} "
+        if opts.output_dir:
+            cmd += f"--output_dir {opts.output_dir} "
+        put2slurm_dict = vars(opts)
+        put2slurm([cmd], put2slurm_dict)
+        sys.exit()
+
+    input_size = pd.read_csv(train_csv, index_col=0).shape[1]
     print('input size: %s'%input_size)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -72,6 +90,7 @@ def train(args):
     train_dataset = GeneExpressionDataset(train_csv)
     train_loader = DataLoader(train_dataset, batch_size=opts.batchsize)
 
+    loss_hist = []
     early_stopping = EarlyStopping(model_name_prefix, patience=opts.patience, verbose=True)
     for epoch in range(opts.epoch):
         print('Epoch {}/{}'.format(epoch, opts.epoch - 1))
@@ -88,10 +107,12 @@ def train(args):
         loss = running_loss / len(train_loader)
         print('Loss: {:.4f}'.format(loss))
         early_stopping(loss, model)
+        loss_hist.append(loss)
         if early_stopping.early_stop:
             print('Early stopping')
             break
         print('Best val loss: {:4f}'.format(early_stopping.val_loss_min))
+    pd.DataFrame(loss_hist).to_csv('%s.loss.hist'%model_name_prefix)
 
 def predict(args):
     """
@@ -101,7 +122,7 @@ def predict(args):
         predict_csv: tab separated FPKM matrix file with column names 
     """
     p = OptionParser(predict.__doc__)
-    p.add_option('--latentsize', default=3, type='int',
+    p.add_option('--latentsize', default=5, type='int',
                     help='the size of the latent feature')
     p.add_option('--batchsize', default=64, type='int', 
                     help='batch size')

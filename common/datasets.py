@@ -19,16 +19,16 @@ class GeneExpressionDataset(Dataset):
     def __init__(self, csv_fn, transform=None):
         """
         Args:
-            csv_fn (string): FPKM csv matrix file with size (gene#, indi# + 1)
+            csv_fn (string): FPKM csv matrix file with dimension (# of indi, # of genes+1)
                 tab separated
-                first col: gene names
-                2nd beyond: individual names
+                first col: sample names
+                2nd beyond: gene names
         """
-        self.csv_df = pd.read_csv(csv_fn, delim_whitespace=True)
+        self.csv_df = pd.read_csv(csv_fn, index=0) # the sample column will be index
         self.transform = transform
 
     def __len__(self):
-        return self.csv_df.shape[1] # number of individuals
+        return self.csv_df.shape[0] # number of individuals
 
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
