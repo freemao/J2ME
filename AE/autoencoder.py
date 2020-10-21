@@ -46,7 +46,7 @@ def train(args):
                     help='the size of the latent feature')
     p.add_option('--batchsize', default=64, type='int', 
                     help='batch size')
-    p.add_option('--epoch', default=2000, type='int', 
+    p.add_option('--epoch', default=5000, type='int', 
                     help='number of total epochs')
     p.add_option('--patience', default=20, type='int', 
                     help='patience in early stopping')
@@ -116,7 +116,7 @@ def train(args):
 
 def predict(args):
     """
-    %prog predict saved_model predict_csv, output_prefix
+    %prog predict saved_model predict_csv output_prefix
     """
     p = OptionParser(predict.__doc__)
     p.add_option('--latentsize', default=5, type='int',
@@ -136,7 +136,7 @@ def predict(args):
     out_dir = Path(opts.output_dir)
     if not out_dir.exists():
         out_dir.mkdir()
-    input_size = pd.read_csv(train_csv, index_col=0).shape[1]
+    input_size = pd.read_csv(predict_csv, index_col=0).shape[1]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = SimpleAE(input_shape=input_size, output_shape=opts.latentsize).to(device)
