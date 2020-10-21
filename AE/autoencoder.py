@@ -91,7 +91,7 @@ def train(args):
     train_loader = DataLoader(train_dataset, batch_size=opts.batchsize)
 
     loss_hist = []
-    early_stopping = EarlyStopping(model_name_prefix, patience=opts.patience, verbose=True)
+    early_stopping = EarlyStopping(model_name_prefix, patience=opts.patience, verbose=True, delta=0.00001)
     for epoch in range(opts.epoch):
         print('Epoch {}/{}'.format(epoch, opts.epoch - 1))
         print('-' * 10)
