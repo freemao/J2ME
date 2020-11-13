@@ -109,7 +109,7 @@ class LeafcountingDataset(Dataset):
         return img, label, img_fn
 
 class ObjectDetectionDataset(Dataset):
-    def __init__(self, csv_fn, root_dir, transforms, sep=',', only_image=False):
+    def __init__(self, csv_fn, root_dir, transforms, sep='\t', only_image=False):
         '''
         csv_fn: tab separated csv file with:
             1st column('fn'): image file name
@@ -152,11 +152,7 @@ class ObjectDetectionDataset(Dataset):
         # map each label to a class with name started from 1
         tips = json.loads(self.csv_df.loc[idx, 'targets'])
         #print(tips)
-        #label_series = pd.Series(np.unique(tips['label']))
-        #label_series.index += 1
-        #label_dict = {y:x for x,y in label_series.items()}
-        #print(label_dict)
-        label_dict = {'intact_tip':1, 'cut_tip':2}
+        label_dict = {'intact':1, 'cut':2}
 
         boxes, labels = [], []
         for x, y, label in zip(tips['x'], tips['y'], tips['label']):
