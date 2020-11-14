@@ -72,9 +72,9 @@ def train(args):
     p = OptionParser(train.__doc__)
     p.add_option('--batchsize', default=20, type='int', 
                     help='batch size')
-    p.add_option('--epoch', default=200, type='int', 
+    p.add_option('--epoch', default=100, type='int', 
                     help='number of total epochs')
-    p.add_option('--patience', default=10, type='int', 
+    p.add_option('--patience', default=4, type='int', 
                     help='patience in early stopping')
     p.add_option('--backbone', default='resnet50', choices=('resnet50', 'resnet101'),
                     help='pretrained model name used as backbone')
@@ -89,7 +89,7 @@ def train(args):
 
     # genearte slurm file
     if not opts.disable_slurm:
-        cmd = "python -m J2ME.detecto.fasterRCNN train "\
+        cmd = "python -m J2ME.detecto.FasterRCNN train "\
             f"{train_csv} {train_dir} {valid_csv} {valid_dir} {mn_prefix} "\
             f"--batchsize {opts.batchsize} "\
             f"--epoch {opts.epoch} "\
@@ -175,7 +175,7 @@ def predict(args):
         out_dir.mkdir()
 
     if not opts.disable_slurm:
-        cmd = "python -m J2ME.detecto.fasterRCNN predict "\
+        cmd = "python -m J2ME.detecto.FasterRCNN predict "\
             f"{saved_model} {test_csv} {test_dir} {output_prefix} "\
             f"--backbone {opts.backbone} "\
             f"--score_cutoff {opts.score_cutoff} "\
