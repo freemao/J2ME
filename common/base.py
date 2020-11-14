@@ -9,7 +9,6 @@ from PIL import Image
 from pathlib import Path
 import torch
 import torch.nn as nn
-
 from torchvision import transforms, models
 
 def split_df_to2(df, n):

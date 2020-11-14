@@ -25,7 +25,7 @@ from J2ME.apps.base import OptionParser, ActionDispatcher, put2slurm
 from J2ME.common.base import EarlyStopping 
 from J2ME.common.datasets import ObjectDetectionDataset
 from J2ME.common.draw import show_box
-from J2ME.detecto.engine import train_one_epoch, evaluate
+from J2ME.detecto.engine import train_one_epoch, evaluate, idx_cleanboxes
 import J2ME.detecto.utils as utils
 import J2ME.detecto.transforms as T
 
@@ -152,8 +152,10 @@ def predict(args):
     p = OptionParser(predict.__doc__)
     p.add_option('--backbone', default='resnet50', choices=('resnet50','resnet101'),
                     help='pretrained model name used as backbone')
-    p.add_option('--score_cutoff', type='float', default=0.7,
+    p.add_option('--score_cutoff', type='float', default=0.5,
                     help='set score cutoff')
+    p.add_option('--second_cutoff', type='float', default=0.83,
+                    help='cutoff for solving overlapped bounding boxes')
     p.add_option('--show_box', default=False, action="store_true",
                  help = 'generate image with predicted bounding box.')
     p.add_option('--output_dir', default='.',
@@ -177,6 +179,7 @@ def predict(args):
             f"{saved_model} {test_csv} {test_dir} {output_prefix} "\
             f"--backbone {opts.backbone} "\
             f"--score_cutoff {opts.score_cutoff} "\
+            f"--second_cutoff {opts.second_cutoff} "\
             f"--output_dir {opts.output_dir} "\
             f"--show_box {opts.show_box} --disable_slurm "
         put2slurm_dict = vars(opts)
@@ -192,8 +195,8 @@ def predict(args):
     test_dataset = ObjectDetectionDataset(test_csv, test_dir, get_transform(train=False), only_image=True, sep=',')
     test_loader = DataLoader(test_dataset, batch_size=1)
 
-    filenames, boxes, labels, scores, lcs = [], [], [], [], [] # lcs: leaf counts
-    print('start testing...')
+    filenames, lcs = [], [] # lcs: leaf counts
+    print('start prediction...')
     for imgs, _, fns in test_loader:
         imgs = imgs.to(device)
         results = model(imgs)
@@ -204,14 +207,27 @@ def predict(args):
         labels = np.array([i.to(device).tolist() for i in labels])
         scores = np.array([i.to(device).tolist() for i in scores])
         idxs = np.argwhere(scores>opts.score_cutoff).squeeze()
+        boxes, labels, scores = boxes[idxs], labels[idxs], scores[idxs]
+
+        # post-process boxes to remvoe redundancy
+        final_idx = idx_cleanboxes(boxes, scores, second_cutoff=opts.second_cutoff)
+        boxes, labels, scores = boxes[final_idx], labels[final_idx], scores[final_idx]
+        
+        # save box coordinates, label, and score
+        npy_prefix = '.'.join(fn.split('.')[0:-1])
+        df = pd.DataFrame(boxes)
+        df.columns = ['x0', 'y0', 'x1', 'y1']
+        df['label'] = labels
+        df['score'] = scores
+        df.to_csv(out_dir/(npy_prefix+'.info.csv'), index=False) 
 
         if opts.show_box:
-            img = show_box(Path(test_dir)/fn, boxes[idxs], labels[idxs], scores[idxs])
+            img = show_box(Path(test_dir)/fn, boxes, labels, scores)
             img_out_fn = fn.replace('.png', '.prd.jpg') if fn.endswith('.png') else fn.replace('.jpg', '.prd.jpg')
             img.save(out_dir/img_out_fn)
 
         filenames.append(fn)
-        lcs.append(len(idxs))
+        lcs.append(len(final_idx))
     pd.DataFrame(dict(zip(['fn', 'lc'], [filenames, lcs]))).to_csv(out_dir/('%s.prediction.csv'%output_prefix), index=False)
     print('Done! check leaf counting results in %s.prediction.csv'%output_prefix)
 

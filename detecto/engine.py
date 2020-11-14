@@ -1,3 +1,7 @@
+import pandas as pd
+import numpy as np
+import networkx 
+from networkx.algorithms.components.connected import connected_components
 import math
 import sys
 import time
@@ -42,7 +46,6 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq):
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
     return loss_dict_reduced, losses_reduced
 
-
 def _get_iou_types(model):
     model_without_ddp = model
     if isinstance(model, torch.nn.parallel.DistributedDataParallel):
@@ -53,7 +56,6 @@ def _get_iou_types(model):
     if isinstance(model_without_ddp, torchvision.models.detection.KeypointRCNN):
         iou_types.append("keypoints")
     return iou_types
-
 
 @torch.no_grad()
 def evaluate(model, data_loader, device):
@@ -96,3 +98,63 @@ def evaluate(model, data_loader, device):
     coco_evaluator.summarize()
     torch.set_num_threads(n_threads)
     return coco_evaluator
+
+def _area(a, b):  # returns None if rectangles don't intersect
+    '''
+    return intersect area of two boxes if overlaping otherwise return None
+    '''
+    dx = min(a.x1, b.x1) - max(a.x0, b.x0)
+    dy = min(a.y1, b.y1) - max(a.y0, b.y0)
+    if (dx>=0) and (dy>=0):
+        return dx*dy
+
+def _to_graph(l):
+    G = networkx.Graph()
+    for part in l:
+        # each sublist is a bunch of nodes
+        G.add_nodes_from(part)
+        # it also imlies a number of edges:
+        G.add_edges_from(_to_edges(part))
+    return G
+
+def _to_edges(l):
+    """ 
+        treat `l` as a Graph and returns it's edges 
+        to_edges(['a','b','c','d']) -> [(a,b), (b,c),(c,d)]
+    """
+    it = iter(l)
+    last = next(it)
+    for current in it:
+        yield last, current
+        last = current 
+
+def idx_cleanboxes(boxes, scores, second_cutoff=0.83):
+    '''
+    boxes: 2d npy containing all boxes in the image
+    socres: 1d npy containing score for each box in boxes
+    '''
+    df = pd.DataFrame(boxes)
+    df.columns = ['x0', 'y0', 'x1', 'y1']
+    df['score'] = scores
+
+    clusters = []
+    for box1 in df.itertuples():
+        cluster = {box1.Index}
+        df2 = df.iloc[box1.Index+1:, :]
+        for box2 in df2.itertuples():
+            if _area(box1, box2):
+                cluster.add(box2.Index)
+        clusters.append(cluster)
+    G = _to_graph(clusters)
+
+    final_index = []
+    for c in connected_components(G):
+        c = list(c)
+        scores = df.loc[c, 'score']
+        cdas = scores[scores>=second_cutoff]
+        cdas_idx = cdas.index.to_list()
+        if len(cdas_idx)>0:
+            final_index.extend(cdas_idx)
+        else:
+            final_index.append(scores.idxmax())
+    return final_index
