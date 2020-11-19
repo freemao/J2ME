@@ -158,6 +158,8 @@ def predict(args):
                     help='cutoff for solving overlapped bounding boxes')
     p.add_option('--show_box', default=False, action="store_true",
                  help = 'generate image with predicted bounding box.')
+    p.add_option('--save_info', default=False, action="store_true",
+                 help = 'save lable, socre, and bounding box in the prediction results.')
     p.add_option('--output_dir', default='.',
                  help = 'specify the output directory for saving prediction results.')
     p.add_option('--disable_slurm', default=False, action="store_true",
@@ -180,8 +182,11 @@ def predict(args):
             f"--backbone {opts.backbone} "\
             f"--score_cutoff {opts.score_cutoff} "\
             f"--second_cutoff {opts.second_cutoff} "\
-            f"--output_dir {opts.output_dir} "\
-            f"--show_box {opts.show_box} --disable_slurm "
+            f"--output_dir {opts.output_dir} --disable_slurm "
+        if opts.show_box:
+            cmd += "--show_box "
+        if opts.save_info:
+            cmd += "--save_info "
         put2slurm_dict = vars(opts)
         put2slurm([cmd], put2slurm_dict)
         sys.exit()
@@ -213,14 +218,14 @@ def predict(args):
         final_idx = idx_cleanboxes(boxes, scores, second_cutoff=opts.second_cutoff)
         boxes, labels, scores = boxes[final_idx], labels[final_idx], scores[final_idx]
         
-        # save box coordinates, label, and score
-        npy_prefix = '.'.join(fn.split('.')[0:-1])
-        df = pd.DataFrame(boxes)
-        df.columns = ['x0', 'y0', 'x1', 'y1']
-        df['label'] = labels
-        df['score'] = scores
-        df.to_csv(out_dir/(npy_prefix+'.info.csv'), index=False) 
-
+        if opts.save_info:
+            # save box coordinates, label, and score
+            npy_prefix = '.'.join(fn.split('.')[0:-1])
+            df = pd.DataFrame(boxes)
+            df.columns = ['x0', 'y0', 'x1', 'y1']
+            df['label'] = labels
+            df['score'] = scores
+            df.to_csv(out_dir/(npy_prefix+'.info.csv'), index=False) 
         if opts.show_box:
             img = show_box(Path(test_dir)/fn, boxes, labels, scores)
             img_out_fn = fn.replace('.png', '.prd.jpg') if fn.endswith('.png') else fn.replace('.jpg', '.prd.jpg')
