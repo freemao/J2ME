@@ -12,18 +12,16 @@ import logging
 import numpy as np
 import pandas as pd
 from pathlib import Path
-
 import torch
-import torchvision
 from torch import nn
-import torchvision.transforms as transforms
-from J2ME.common.datasets import GeneExpressionDataset
-import torch.optim as optim
 from torch.utils.data import DataLoader
+import torch.optim as optim
+import torchvision
+import torchvision.transforms as transforms
 from J2ME.AE.models import SimpleAE
+from J2ME.common.base import EarlyStopping
+from J2ME.common.datasets import GeneExpressionDataset
 from J2ME.apps.base import OptionParser, ActionDispatcher, put2slurm
-from J2ME.common.base import EarlyStopping 
-from schnablelab.CNN.base import EarlyStopping
 
 def main():
     actions = (
